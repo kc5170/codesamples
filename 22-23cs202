@@ -1,0 +1,410 @@
+// Author: Kaison Fong
+// Assignment: CS 202 Programming Assignment 1 Final Checkpoint
+// Date: 4/7/2023
+#include "customer.h"
+#include "drink.h"
+#include "food.h"
+#include <fstream>
+#define MAX_NUM_CUSTOMERS 1000
+
+int getUserIntChoice(){
+    int userIntInput;
+    cin >> userIntInput;
+    return userIntInput;
+}
+
+char getUserCharChoice(){
+    char userCharInput;
+    cin >> userCharInput;
+    return userCharInput;
+}
+
+string getUserStringEntry(){
+    string userStringInput;
+    cin >> userStringInput;
+    return userStringInput;
+}
+
+Customer createCustomer(){
+    int tempint;
+    string tempfirst, templast;
+    cin >> tempint >> tempfirst >> templast;
+    Customer newCustomer(tempfirst, templast, tempint, 50);
+    return newCustomer;
+}
+
+void displayMenuItems(){
+    cout << endl;
+    cout << "=====Meaty Meat Man's Restaurant Menu=====" << endl;
+    cout << "1.) Smoked Meat Sandwich" << endl;
+    cout << "2.) Meaty Meat Man Meal" << endl;
+    cout << "3.) Fountain Drink" << endl;
+    cout << "4.) Tater Tots" << endl;
+    cout << "0.) Finish Order" << endl;
+    cout << endl;
+}
+
+void displayPointRedemptionMenu(){
+    cout << "1.) Sandwich, 450 pts" << endl;
+    cout << "2.) 32 oz. Drink, 50 pts" << endl;
+    cout << "3.) Meat Man Meal, 500 pts" << endl;
+    cout << "4.) Small Tater Tot, 75 pts" << endl;
+}
+
+void displayMemberJoin(){
+    cout << "Don't have a loyalty number?" << endl;
+    cout << "Join today and earn a free large drink!" << endl;
+    cout << "Being a member of the Meat Man Mob Loyalty Program provides the following benefits:" << endl;
+    displayPointRedemptionMenu();
+    cout << endl << endl;
+    cout << "Would you like to join the Meat Man Mob Loyalty Program?(y/n) ";
+}
+
+void addItemToOrder(int optionSelected, Customer* customer){
+    if (optionSelected == 1) {
+        MenuItem sandwich;
+        sandwich.setCost(12.99);
+        sandwich.setItemName("Smoked Meat Sandwich");
+        sandwich.setPointWorth(450);
+        customer->addItemToOrder(sandwich);
+    }
+    if (optionSelected == 2) {
+        MenuItem manmeal;
+        manmeal.setCost(15.99);
+        manmeal.setItemName("Meaty Meat Man Meal");
+        manmeal.setPointWorth(500);
+        customer->addItemToOrder(manmeal);
+    }
+    if (optionSelected == 3) {
+        MenuItem fountaindrink;
+        fountaindrink.setCost(2.99);
+        fountaindrink.setItemName("Fountain Drink");
+        fountaindrink.setPointWorth(50);
+        customer->addItemToOrder(fountaindrink);
+    }
+    if (optionSelected == 4) {
+        MenuItem tatertot;
+        tatertot.setCost(3.99);
+        tatertot.setItemName("Tater Tots");
+        tatertot.setPointWorth(75);
+        customer->addItemToOrder(tatertot);
+    }
+}
+
+void displayLoyaltyInformationPrompt(){
+    cout << "Enrolling in the Meat Man Mob Loyalty Program is simple!" << endl;
+    cout << "Just enter your 7 digit phone number without any dashes and your first and last name!" << endl;
+    cout << "For example: 1111111 Pete Wentz" << endl;
+    cout << endl;
+}
+
+int runLoyaltyProgram(Customer* customers, int numCustomers){
+    bool responded = false;
+    bool truth = false;
+    cout << endl << endl << "Welcome to Meaty Meat Man's Market!" << endl << endl;
+    char temp;
+    while (responded == false){
+        cout << "Are you a member of the Meat Man Mob Loyalty Program? (y/n) ";
+        char response = getUserCharChoice();
+        if (response == 'E' || response == 'e'){
+            return -2;
+        }
+        if (response == 'y' || response == 'n' || response == 'Y' || response == 'N'){
+            responded = true;
+            temp = response;
+        }
+    }
+    if (temp == 'y' || temp == 'Y'){
+        cout << endl << "Please enter your loyalty number: ";
+        int temployalty = getUserIntChoice();
+        bool answered = false;
+        for (int i = 0; i < numCustomers; i++){
+            if (customers[i].getLoyaltyNumber() == temployalty){
+                customers[i].displayCustomerInformation();
+                truth = true;
+                answered = true;
+                return i;
+            }
+        } 
+        while (answered == false){
+            if (truth == false){
+                displayMemberJoin();
+            }
+            char userresponse = getUserCharChoice();
+            if (userresponse == 'n'){
+                return -1;
+            }    
+            if (userresponse == 'y'){
+                displayLoyaltyInformationPrompt();
+                Customer newlyCreated = createCustomer();
+                customers[numCustomers] = newlyCreated;
+                customers[numCustomers].displayCustomerInformation();
+                return numCustomers;
+            }
+        
+        }
+    }
+    if (temp == 'n' || temp == 'N'){
+        bool answered = false;
+        while (answered == false){
+            cout << endl << endl;
+            displayMemberJoin();
+            char userresponse = getUserCharChoice();
+            if (userresponse == 'n'){
+                return -1;
+            }    
+            if (userresponse == 'y'){
+                displayLoyaltyInformationPrompt();
+                Customer newlyCreated = createCustomer();
+                customers[numCustomers] = newlyCreated;
+                customers[numCustomers].displayCustomerInformation();
+                return numCustomers;
+            }
+        }
+    }
+    return 0;
+}
+
+void overwriteLoyaltyDatabase(Customer* customers, int numCustomers){
+    ofstream fout("loyalty.txt");
+    if (fout.is_open()) {
+        for (int i = 0; i <= numCustomers; i++){
+            if (i != numCustomers){
+                if (customers[i].getCustomerFirst() != "John" && customers[i].getCustomerLast() != "Smith"){
+                    fout << customers[i].getLoyaltyNumber() << " " << customers[i].getCustomerFirst() << " " << customers[i].getCustomerLast() << " " << customers[i].getNumberLoyaltyPoints() << endl;
+                }
+            }
+            else{
+                if (customers[i].getCustomerFirst() != "John" && customers[i].getCustomerLast() != "Smith"){
+                    fout << customers[i].getLoyaltyNumber() << " " << customers[i].getCustomerFirst() << " " << customers[i].getCustomerLast() << " " << customers[i].getNumberLoyaltyPoints();
+                }
+            }
+        }
+    }
+}
+
+bool pointSystemPrompt(Customer* customers){
+    bool answered = false;
+    while (answered == false){
+        cout << endl;
+        cout << "Would you like to use any of your " << customers->getNumberLoyaltyPoints() << " Loyalty Points (y/n)? ";
+        char ans = getUserCharChoice();
+        if (ans == 'y' || ans == 'Y'){
+            answered = true;
+            return true;
+        }
+        if (ans == 'n' || ans == 'N'){
+            answered = true;
+            cout << "Cool, we'll bank those points for later!" << endl << endl;
+            return false;
+        }
+    }    
+    return false;
+}
+
+void placeOrder(Customer* customer){
+    bool done = false;
+    while (done == false){
+        displayMenuItems();
+        cout << "Please Enter a Value [0-4]: ";
+        int tempint = getUserIntChoice();
+        if (tempint == 0) {
+            done = true;
+        }
+        else {
+            addItemToOrder(tempint, customer);
+        }
+    }
+}
+
+int getLoyaltyDatabase(Customer* customerArray){
+    int count=0;
+    string temporaryfirst;
+    string temporarylast;
+    long int temporaryid;
+    long int temporarypts;
+    ifstream fin;
+    fin.open("loyalty.txt");
+    if (fin.is_open()) {
+        while (fin >> temporaryid >> temporaryfirst >> temporarylast >> temporarypts) {
+            customerArray[count] = Customer(temporaryfirst, temporarylast, temporaryid, temporarypts);
+            count += 1;
+        }
+    }
+    fin.close();
+    return count;
+}
+
+void calculateChange(Customer* customer){
+    float userCost = customer->calculateCost();
+    bool paid = false;
+    if (userCost > 0){
+        while (paid == false){
+            float toPay;
+            cout << endl;
+            cout << "Please enter the amount you'd like to pay with: $";
+            cin >> toPay;
+            if (toPay < userCost){
+                cout << "Insufficient Funds, Trying Again..." << endl << endl;
+            }
+            else{
+                float change = toPay - userCost;
+                cout << "Your change today is: $" << fixed << setprecision(2) << change << endl;
+                cout << "Have a nice day, and thank you for choosing Meaty Meat Man's Market!" << endl;
+                paid = true;
+            }
+        }
+    }
+    else{
+        cout << "Have a nice day, and thank you for choosing Meaty Meat Man's Market!" << endl;
+    }
+}
+
+int getNumberOfPointsToRedeem(string* foodName, int userOption){
+    if (userOption == 0){
+        return 0;
+    }
+    if (userOption == 1){
+        *foodName = "Smoked Meat Sandwich";
+        return 450;
+    }
+    if (userOption == 2){
+        *foodName = "Fountain Drink";
+        return 50;
+    }
+    if (userOption == 3){
+        *foodName = "Meaty Meat Man Meal";
+        return 500;
+    }
+    if (userOption == 4){
+        *foodName = "Tater Tots";
+        return 75;
+    }
+    else{
+        return 0;
+    }
+    return 0;
+}
+
+void useLoyalty(Customer* customer, int numCustomers, int availablePts){
+    bool exitloop = false;
+    float totalCost;
+    int tempholder;
+    int itemCostHolder;
+    MenuItem* order;
+    while (exitloop == false){
+        bool found = false;
+        displayPointRedemptionMenu();
+        cout << "0.) I've changed my mind!" << endl << endl;
+        cout << "Which offer would you like to redeem? [0-4] ";
+        int userChoice = getUserIntChoice();
+        int foodItemCost = 0;
+        string passedString = "temp";
+        bool validInt = false;
+        MenuItem* order;
+
+        if (userChoice == 0){
+            passedString = "filler";
+            foodItemCost = getNumberOfPointsToRedeem(&passedString, 0);
+            validInt = true;
+        }
+        if (userChoice == 1){
+            passedString = "Sandwich";
+            foodItemCost = getNumberOfPointsToRedeem(&passedString, 1);
+            validInt = true;
+        }
+        if (userChoice == 2){
+            passedString = "32 oz. Drink";
+            foodItemCost = getNumberOfPointsToRedeem(&passedString, 2);
+            validInt = true;
+        }
+        if (userChoice == 3){
+            passedString = "Meat Man Meal";
+            foodItemCost = getNumberOfPointsToRedeem(&passedString, 3);
+            validInt = true;
+        }
+        if (userChoice == 4){
+            passedString = "Small Tater Tot";
+            foodItemCost = getNumberOfPointsToRedeem(&passedString, 4);
+            validInt = true;
+        }
+        if (validInt == true){
+            order = customer->getCurrentOrder();
+            int numItems = customer->getNumItemsInOrder();
+            totalCost = 0;
+            for (int i = 0; i < numItems; i++){
+                totalCost += order[i].getCost();
+                if (order[i].getItemName() == passedString){
+                    found = true;
+                    exitloop = true;
+                    tempholder = i;
+                    itemCostHolder = foodItemCost;
+                }
+            }
+        }
+        if (found == false){
+            cout << endl << endl << "Sorry you didn't order that! Try again another time :)" << endl << endl;
+        }
+    }
+    if (availablePts >= itemCostHolder){
+        availablePts -= itemCostHolder;
+        int intTotalCost = totalCost*1.0827;
+        availablePts += intTotalCost;
+        customer->setNumberLoyaltyPoints(availablePts);
+        MenuItem* customersOrder = customer->getCurrentOrder();
+        customersOrder[tempholder].setCost(0.00);
+        totalCost -= customersOrder[tempholder].getCost();
+    }
+    else if (availablePts < itemCostHolder){
+        cout << endl << "Insufficient number of points! Try again another time :)" << endl << endl;
+    }     
+}
+
+int main(){
+    Customer customers[MAX_NUM_CUSTOMERS];
+    bool done = true;
+    int count;
+    int numTimes = 0;
+    while (done == true){
+        if (numTimes != 0){
+            cout << endl << endl << endl;
+        }
+        int count = getLoyaltyDatabase(customers);
+        int tempcount = runLoyaltyProgram(customers, count);
+        if (tempcount == -2){
+            done = false;
+        }
+        else{
+            if (tempcount == -1){
+                Customer user = Customer();
+                user.setNumItemsInOrder(0);
+                placeOrder(&user);
+                user.displayOrder();
+                calculateChange(&user);
+            }
+            else{
+                customers[tempcount].setNumItemsInOrder(0);
+                placeOrder(&customers[tempcount]);
+                bool result = pointSystemPrompt(&customers[tempcount]);
+                if (result == true){
+                    useLoyalty(&customers[tempcount], tempcount, customers[tempcount].getNumberLoyaltyPoints());
+                }
+                else{
+                    int temphold = customers[tempcount].getNumberLoyaltyPoints();
+                    int tempcost = customers->calculateCost();
+                    cout << temphold + tempcost;
+                    customers[tempcount].setNumberLoyaltyPoints(temphold + tempcost);
+                }
+                customers[tempcount].displayOrder();
+                calculateChange(&customers[tempcount]);
+                if (tempcount + 1 < count){
+                    overwriteLoyaltyDatabase(customers, count);
+                }
+                else{
+                    overwriteLoyaltyDatabase(customers, tempcount+1);
+                }
+            }
+        }
+        numTimes += 1;
+    }
+}
