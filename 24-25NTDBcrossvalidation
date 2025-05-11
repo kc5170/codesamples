@@ -1,1 +1,159 @@
 
+library(MASS)
+library(lattice)
+library(ggplot2)
+library(caret)
+library(gplots)
+library(ROCR)
+
+#for weighted model
+running_weighted_model <- TRUE
+
+#case cost (to 1)
+CASE_COST_TO_CONTROL <- 46 
+load("SingleI.RData")
+
+# remove AIS ratings of 9
+SingleI <- SingleI[SingleI$Head.Severity_AIS98 != 9, ]
+
+# split into testing and training sets
+training <- SingleI[SingleI$YOADMIT != 2015, ]
+test <- SingleI[SingleI$YOADMIT == 2015, ]
+
+# remove unnecessary variables
+training$Head_AIS98 <- NULL
+test$Head_AIS98 <- NULL
+training$YOADMIT <- NULL
+test$YOADMIT <- NULL
+
+# define cost
+# set each to 1 for normal regression
+case_cost <- CASE_COST_TO_CONTROL * 10 #i if running multiple ratios
+control_cost <- 10
+
+wgt <- ifelse(training$Death.within.14.days == 1, case_cost, control_cost)
+wgt <- wgt * nrow(training) / sum(wgt)
+
+# fit model
+full_fit <- glm(data = training, Death.within.14.days ~ ., family = binomial, weights = wgt)
+step_fit <- stepAIC(full_fit, direction = 'backward', k = log(nrow(training)))
+
+# split testing data into 5 folds, case and control
+case <- training[training$Death.within.14.days == 1,]
+control <- training[training$Death.within.14.days == 0,]
+
+numfolds <- 5
+
+# make folds for each set
+seed <- ifelse(running_weighted_model, 001, 010)
+set.seed(seed)
+case_folds <- createFolds(case$Death.within.14.days, k = numfolds)
+control_folds <- createFolds(control$Death.within.14.days, k = numfolds)
+
+# combine folds
+folds <- sapply(1:numfolds, function(x){name <- paste('Fold', toString(x), sep = '');
+data <- rbind(case[case_folds[[name]], ], control[control_folds[[name]], ])
+return(list(data))})
+
+# prediction for each fold
+gen.fold.predictions <- function(foldnum){
+  test <- folds[[foldnum]]
+  pred_val <- predict(step_fit, test, type = 'response')
+  pred_obj <- prediction(pred_val, test$Death.within.14.days)
+  return(list(pred_obj))
+}
+
+preds <- sapply(1:numfolds, gen.fold.predictions)
+
+# performance measures
+gen.fold.performance <- function(foldnum){
+  folds[[foldnum]]$predictions <- preds[[foldnum]]@predictions[[1]]
+  sens_spec <- performance(preds[[foldnum]], 'spec', 'sens')
+  npv_ppv <- performance(preds[[foldnum]], 'npv', 'ppv')
+  err_acc <- performance(preds[[foldnum]], 'err', 'acc')
+  at_cuts <- data.frame(cutoff <- sens_spec@alpha.values[[1]],
+                        spec <- sens_spec@y.values[[1]],
+                        sens <- sens_spec@x.values[[1]],
+                        npv <- npv_ppv@y.values[[1]],
+                        ppv <- npv_ppv@x.values[[1]],
+                        err <- err_acc@y.values[[1]],
+                        acc <- err_acc@x.values[[1]])
+  colnames(at_cuts) <- c('cutoff', 'spe', 'sens', 'npv', 'ppv', 'err', 'acc')
+  at_cuts$total_cost <- sapply(at_cuts$cutoff, function(x){
+    return(case_cost * nrow(folds[[foldnum]][folds[[foldnum]]$predictions < x & folds[[foldnum]]$Death.within.14.days == 1, ]) + 
+             control_cost * nrow(folds[[foldnum]][folds[[foldnum]]$predictions >= x & folds[[foldnum]]$Death.within.14.days == 0, ]))})
+  return(list(at_cuts))
+}
+
+perfs <- sapply(1:numfolds, gen.fold.performance)
+
+# define threshold values calc performance measures at each threshold
+t <- seq(0, 1, 0.001)
+# calculate false positives (fp), true positives (tp), false negatives (fn), and true negatives (tn)
+#for each fold
+for(fold in 1:numfolds) {
+  folds[[fold]]$predictions <- preds[[fold]]@predictions[[1]]
+  for(threshold in t){
+    folds[[fold]][[paste("fp.at.", toString(threshold), sep = '')]] <-
+      ifelse((folds[[fold]]$predictions > threshold & folds[[fold]]$Death.within.14.days == 0), 1, 0)
+    folds[[fold]][[paste("fn.at.", toString(threshold), sep = '')]] <-
+      ifelse((folds[[fold]]$predictions < threshold & folds[[fold]]$Death.within.14.days == 1), 1, 0)
+  }
+}
+
+cost_frame <- data.frame()
+
+# find total cost for each threshold
+for(threshold in t){
+
+  fn_col <- paste("fn.at.", toString(threshold), sep = '')
+  fp_col <- paste("fp.at.", toString(threshold), sep = '')
+  costs <- NULL
+
+  for(fold in 1:numfolds){
+    next_cost <- control_cost * sum(folds[[fold]][[fp_col]]) + case_cost * sum(folds[[fold]][[fn_col]])
+    costs <- c(costs, next_cost)
+  }
+
+  avg <- mean(costs)
+  row <- c(threshold, costs, avg)
+  cost_frame <- rbind(cost_frame, row)
+}
+
+colnames(cost_frame) <- c('t', 'Fold.1', 'Fold.2', 'Fold.3', 'Fold.4', 'Fold.5', 'Avg')
+
+# optimal threshold minimizing cost function
+opt_threshold <- cost_frame[which.min(cost_frame$Avg), ]$t
+
+# performance measures for test set (NTDB 2015)
+pred_val <- predict(step_fit, test, type = 'response')
+pred_obj <- prediction(pred_val, test$Death.within.14.days)
+test$predictions <- pred_obj@predictions[[1]]
+sens_spec <- performance(pred_obj, 'spec', 'sens')
+npv_ppv <- performance(pred_obj, 'npv', 'ppv')
+err_acc <- performance(pred_obj, 'err', 'acc')
+at_cuts <- data.frame(cutoff <- sens_spec@alpha.values[[1]],
+                      spec <- sens_spec@y.values[[1]],
+                      sens <- sens_spec@x.values[[1]],
+                      npv <- npv_ppv@y.values[[1]],
+                      ppv <- npv_ppv@x.values[[1]],
+                      err <- err_acc@y.values[[1]],
+                      acc <- err_acc@x.values[[1]])
+colnames(at_cuts) <- c('cutoff', 'spe', 'sens', 'npv', 'ppv', 'err', 'acc')
+at_cuts$total_cost <- sapply(at_cuts$cutoff, function(x){
+  return(case_cost * nrow(test[test$predictions < x & test$Death.within.14.days == 1, ]) + 
+           control_cost * nrow(test[test$predictions >= x & test$Death.within.14.days == 0, ]))})
+
+# save results in new directory
+if(SAVE){
+  dir.create('Results')
+  save(running_weighted_model, CASE_COST_TO_CONTROL, step_fit, perfs,
+       folds, cost_frame, opt_threshold, file = 'Results/results.RData')
+  write.csv(cost_frame, file = 'Results/cost_across_folds.csv')
+  write.csv(at_cuts, file = 'Results/performance_on_test_set.csv')
+  write.csv(perfs[[1]], file = 'Results/performance_measures_fold_1.csv')
+  write.csv(perfs[[2]], file = 'Results/performance_measures_fold_2.csv')
+  write.csv(perfs[[3]], file = 'Results/performance_measures_fold_3.csv')
+  write.csv(perfs[[4]], file = 'Results/performance_measures_fold_4.csv')
+  write.csv(perfs[[5]], file = 'Results/performance_measures_fold_5.csv')
+}
